@@ -2,22 +2,26 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <signal.h>
+#include <unistd.h>
 
 void clearResources(int);
 
+FILE* f_ptr = NULL;
+struct PCB* processes = NULL;
 
 int main(int argc, char *argv[])
 {
     signal(SIGINT, clearResources);
     // 1. Read the input files.
-    char* file_path = argv[1];   
-    FILE* f_ptr = NULL;
+    char* file_path = argv[1];
     f_ptr = fopen(file_path, "r");
     if(f_ptr == NULL){
         printf("%s not found\n", file_path);
         return -1;
     }
 
+    // count the number of processes
     char dump[40];
     fscanf(f_ptr, " %[^\n]", dump);
     unsigned num_of_processes = 0;
@@ -71,13 +75,18 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-
-    if(scheduling_alg == RR){ 
-        char* scheduler_args[] = {"./scheduler.o", argv[1], "-sch", argv[shceduling_alg_index], "-q", argv[quantum_index], NULL};
-        execv("scheduler.o", scheduler_args);
-    }else{
-        char* scheduler_args[] = {"./scheduler.o", argv[1], "-sch", argv[shceduling_alg_index], NULL};
-        execv("scheduler.o", scheduler_args);
+    pid_t pid = fork();
+    if(pid == -1){
+        printf("Failed to start scheduler.\n");
+        return -1;
+    }else if(pid == 0){ // child process
+        if(scheduling_alg == RR){ 
+            char* scheduler_args[] = {"./scheduler.o", argv[1], "-sch", argv[shceduling_alg_index], "-q", argv[quantum_index], NULL};
+            execv("scheduler.o", scheduler_args);
+        }else{
+            char* scheduler_args[] = {"./scheduler.o", argv[1], "-sch", argv[shceduling_alg_index], NULL};
+            execv("scheduler.o", scheduler_args);
+        }
     }
 
     // 4. Use this function after creating the clock process to initialize clock.
@@ -87,7 +96,7 @@ int main(int argc, char *argv[])
     printf("Current Time is %d\n", x);
     
     // 5. Create a data structure for processes and provide it with its parameters.
-    struct PCB* processes = malloc(sizeof(struct PCB)*num_of_processes);
+    processes = malloc(sizeof(struct PCB)*num_of_processes);
     unsigned id, arr_time, runtime, priority;
     rewind(f_ptr);
     fscanf(f_ptr, " %[^\n]", dump);
@@ -130,5 +139,12 @@ int main(int argc, char *argv[])
 
 void clearResources(int signum)
 {
-    //TODO Clears all resources in case of interruption
+    destroyClk(true);
+    if(f_ptr != NULL){
+        fclose(f_ptr);
+    }
+
+    if(processes != NULL){
+        free(processes);
+    }
 }

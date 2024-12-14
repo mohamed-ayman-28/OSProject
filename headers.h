@@ -18,6 +18,8 @@ typedef short bool;
 #define SHKEY 300
 #define MSG_Q_KEY 400
 
+#define NUM_OF_PRIORITY_LVLS 11
+
 struct PCB{
     int pid;
     int arrival_time;

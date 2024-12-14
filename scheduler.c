@@ -1,22 +1,30 @@
 #include "headers.h"
+#include "data_structures.h"
+#include "helpers.h"
 #include <sys/types.h>
 #include <sys/msg.h>
 
-struct PCB* ready_queue;
+
+struct MLFQ mlfq_ready_list;
+int curr_priority_level = 0;
+
 int queue_size = 0;
+// not used by MLFQ
 int last_element_index = -1;
 
-void SJFSchedule(struct PCB* queue);
-void HPFSchedule(struct PCB* queue);
-void RRSchedule(struct PCB* queue);
-void MLFLSchedule(struct PCB* queue);
-void SJFAddToReadyList(struct PCB* queue, struct PCB proc);
-void HPFAddToReadyList(struct PCB* queue, struct PCB proc);
-void RRAddToReadyList(struct PCB* queue, struct PCB proc);
-void MLFLAddToReadyList(struct PCB* queue, struct PCB proc);
+void SJFSchedule(struct ProcLinkedListNode* queue);
+void HPFSchedule(struct ProcLinkedListNode* queue);
+void RRSchedule(struct ProcLinkedListNode* queue);
+void MLFQSchedule(struct MLFQ* multilevel_queue);
+void initializeMLFQ(struct MLFQ* multilevel_queue);
+void SJFAddToReadyList(struct ProcLinkedListNode* queue, struct PCB proc);
+void HPFAddToReadyList(struct ProcLinkedListNode* queue, struct PCB proc);
+void RRAddToReadyList(struct ProcLinkedListNode* queue, struct PCB proc);
+void MLFQAddToReadyList(struct MLFQ* multilevel_queue, struct PCB proc);
 
 int main(int argc, char *argv[])
 {
+    int total_waiting_time = 0;
     int scheduling_alg; 
     int qunatum = -1;
     int shceduling_alg_index, quantum_index;
@@ -60,16 +68,62 @@ int main(int argc, char *argv[])
     destroyClk(true);
 }
 
+void initializeMLFQ(struct MLFQ* multilevel_queue){
+    for(int i = 0; i < NUM_OF_PRIORITY_LVLS; i++){
+        multilevel_queue->queue_sizes[i] = 0;
+        multilevel_queue->queues[i] = NULL;
+    }
+}
 
-void SJFAddToReadyList(struct PCB* queue, struct PCB proc){
-    int i;
-    for(i = last_element_index; i >= 0 ; i--){
-        if(queue[i].remaining_time <= proc.remaining_time){
-            queue[i+1] = queue[i];
-        }else{
+void MLFQAddToReadyList(struct MLFQ* multilevel_queue, struct PCB proc){
+    pid_t pid;
+    char remaining_time_str[5];
+    for(int i = 0; i < NUM_OF_PRIORITY_LVLS; i++){
+        if(proc.priority == i){ 
+            struct MLFQLinkedListNode* temp;
+            struct MLFQLinkedListNode* new_node;
+
+
+            if(multilevel_queue->queues[proc.priority] == NULL){ // the queue was still empty
+                multilevel_queue->queues[proc.priority] = new_node;
+            }else{
+                temp = multilevel_queue->queues[proc.priority];
+                multilevel_queue->queues[proc.priority]->next_node = new_node;
+                temp->next_node = new_node;
+            }
+
+            new_node = malloc(sizeof(struct MLFQLinkedListNode));
+            new_node->next_node = NULL;
+            new_node->current_priority = proc.priority;
+            new_node->proc = proc;
+            pid = fork();
+            new_node->real_pid = pid;
+            if(pid == -1){
+                printf("Scheduler : failed to add process %d to the ready queue.\n", proc.pid);
+                if(curr_node != NULL){ // the list wasn't already empty
+                    free(new_node);
+                    new_node = NULL;
+                    curr_node->next_node = NULL;
+                }else{
+                    free(new_node);
+                }
+                multilevel_queue->queue_sizes[proc.priority] = multilevel_queue->queue_sizes[proc.priority] - 1;
+            }else if(pid == 0){
+                convertIntToStr(proc.remaining_time, 5, remaining_time_str);
+                char* process_args[] = {"./process.o", remaining_time_str, NULL};
+                execv("process.o", process_args);
+            }
+
+            if(pid != -1 && pid != 0){
+                // do forget to do logging and calculations here 
+            }
+
+            multilevel_queue->queue_sizes[proc.priority] = multilevel_queue->queue_sizes[proc.priority] + 1;
             break;
         }
     }
+}
 
-    queue[i+1] = proc;    
+void MLFQSchedule(struct MLFQ* multilevel_queue){
+
 }
