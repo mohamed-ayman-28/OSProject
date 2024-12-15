@@ -1,3 +1,6 @@
+#ifndef DATA_STRUCTURES_H_
+#define DATA_STRUCTURES_H_
+
 #include "headers.h"
 
 struct ProcLinkedListNode {
@@ -7,6 +10,7 @@ struct ProcLinkedListNode {
 };
 
 struct MLFQLinkedListNode {
+    int cycles_left_in_quantum;
     int real_pid;
     struct PCB proc;
     int current_priority;
@@ -14,7 +18,9 @@ struct MLFQLinkedListNode {
 };
 
 struct MLFQ{
-    int queue_sizes[NUM_OF_PRIORITY_LVLS];
     struct MLFQLinkedListNode* queues[NUM_OF_PRIORITY_LVLS];
-    struct MLFQLinkedListNode* curr_node_in_queue[NUM_OF_PRIORITY_LVLS]; // each element points to the current element in that queue
+    struct MLFQLinkedListNode* queue_curr_node[NUM_OF_PRIORITY_LVLS]; // each element points to the current element in that queue
+    struct MLFQLinkedListNode* queue_last_node[NUM_OF_PRIORITY_LVLS];
 };
+
+#endif

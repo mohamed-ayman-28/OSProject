@@ -1,3 +1,6 @@
+#ifndef HEADERS_H_
+#define HEADERS_H_
+
 #include <stdio.h> //if you don't use scanf/printf change this include
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -10,6 +13,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
+#include <errno.h>
+#include <string.h>
 
 typedef short bool;
 #define true 1
@@ -20,15 +25,20 @@ typedef short bool;
 
 #define NUM_OF_PRIORITY_LVLS 11
 
+typedef  enum {STARTING=1, RESUMED, STOPPED, FINISHED } PROC_STAT;
+
 struct PCB{
     int pid;
     int arrival_time;
+    int running_time;
     int remaining_time;
     int priority;
     int waiting_time;
+    int last_time_running;
+    PROC_STAT state;
 };
 
-enum SCHEDULING_ALGORITHM {SJF=1, HPF, RR, MLFP} ;
+enum SCHEDULING_ALGORITHM {SJF=1, HPF, RR, MLFQ} ;
 
 struct msgbuf {
     long mtype;
@@ -78,3 +88,5 @@ void destroyClk(bool terminateAll)
         killpg(getpgrp(), SIGINT);
     }
 }
+
+#endif
