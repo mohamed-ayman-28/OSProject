@@ -151,6 +151,23 @@ void MLFQAddToReadyList(struct MLFQ* multilevel_queue, struct PCB proc){
 
 }
 
+void RRAddToReadyList(struct ProcLinkedListNode* queue, struct PCB proc){
+    struct msgbuf received_msg;
+    int recv_val = -1;
+    curr_time = -1;
+    int no_scheduling;
+    int no_process_added;
+
+    int queue_is_empty;
+    int turnaround_time;
+    double weighted_turnaround_time;
+    int waiting_time;
+    start_time = getClk();
+    while(1){
+        no_scheduling = 1;
+        
+    }
+}
 
 void MLFQSchedule(struct MLFQ* multilevel_queue){
 
