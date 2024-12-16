@@ -83,7 +83,12 @@ int main(int argc, char *argv[])
 
     //TODO: implement the scheduler.
     scheduler_log_f_ptr = fopen("scheduler.log", "w");
+    if (scheduler_log_f_ptr == NULL) {
+    perror("Error opening scheduler log file");
+    return -1;
+}
     fprintf(scheduler_log_f_ptr, "#At time x process y state arr w total z remain y wait k\n");
+    fflush(scheduler_log_f_ptr);
     printf("Ana hena dakhel el scheduler");
     //printf("%d\n",scheduling_alg);
     switch(scheduling_alg){
@@ -161,9 +166,10 @@ void SJFSchedule(struct PriorityQueue* queue)
             } else {
                 weighted_turnaround_time = 0;
             }
-            waiting_time = turnaround_time - RunningProcess.running_time;
+            waiting_time = curr_time - RunningProcess.arrival_time;
             total_waiting_time += waiting_time;
             total_weighted_turnaround_time += weighted_turnaround_time;
+            RunningProcess.waiting_time=waiting_time;
             schedulerLog(scheduler_log_f_ptr, curr_time, &(RunningProcess), turnaround_time, weighted_turnaround_time);
 
             // Pop the next process from the ready list
@@ -375,23 +381,6 @@ void MLFQAddToReadyList(struct MLFQ* multilevel_queue, struct PCB proc){
 
 }
 
-void RRAddToReadyList(struct ProcLinkedListNode* queue, struct PCB proc){
-    struct msgbuf received_msg;
-    int recv_val = -1;
-    curr_time = -1;
-    int no_scheduling;
-    int no_process_added;
-
-    int queue_is_empty;
-    int turnaround_time;
-    double weighted_turnaround_time;
-    int waiting_time;
-    start_time = getClk();
-    while(1){
-        no_scheduling = 1;
-        
-    }
-}
 
 void MLFQSchedule(struct MLFQ* multilevel_queue){
 
@@ -522,6 +511,8 @@ void MLFQSchedule(struct MLFQ* multilevel_queue){
             idle_cycles++;
         }
     }
-
-    end_time = curr_time;
+ received_msg.mtype=9;
+msgsnd(mqid, &received_msg, sizeof(struct PCB), !IPC_NOWAIT);
+end_time = curr_time;
+    
 }
