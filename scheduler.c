@@ -1,12 +1,12 @@
-#include "headers.h"
-#include "data_structures.h"
 #include "helpers.h"
+#include <sys/msg.h>
 
 
 struct MLFQ mlfq_ready_list;
+struct PriorityQueue Readylist;
 int curr_priority_level = 0;
 int mqid;
-
+struct PCB RunningProcess;
 int queue_size = 0;
 // not used by MLFQ
 int last_element_index;
@@ -19,18 +19,19 @@ int start_time, end_time, idle_cycles;
 FILE* scheduler_log_f_ptr;
 FILE* scheduler_perf_f_ptr;
 
-void SJFSchedule(struct ProcLinkedListNode* queue);
-void HPFSchedule(struct ProcLinkedListNode* queue);
+void SJFSchedule(struct PriorityQueue* queue);
+void HPFSchedule(struct PriorityQueue* queue);
 void RRSchedule(struct ProcLinkedListNode* queue);
 void MLFQSchedule(struct MLFQ* multilevel_queue);
 void initializeMLFQ(struct MLFQ* multilevel_queue);
-void SJFAddToReadyList(struct ProcLinkedListNode* queue, struct PCB proc);
-void HPFAddToReadyList(struct ProcLinkedListNode* queue, struct PCB proc);
+void SJFAddToReadyList(struct PriorityQueue* queue, struct PCB proc);
+void HPFAddToReadyList(struct PriorityQueue* queue, struct PCB proc);
 void RRAddToReadyList(struct ProcLinkedListNode* queue, struct PCB proc);
 void MLFQAddToReadyList(struct MLFQ* multilevel_queue, struct PCB proc);
 
 int main(int argc, char *argv[])
 {
+    printf("d5lna l sched lolololoy \n ");
 
     mqid = msgget(MSG_Q_KEY, 0644);
     if(mqid == -1){
@@ -48,7 +49,7 @@ int main(int argc, char *argv[])
     int shceduling_alg_index, quantum_index;
 
     for(int i = 1; i < argc; i++){
-        if(strcmp(argv[i], "-sch")){
+        if(strcmp(argv[i], "-sch") == 0){
             if(i+1 == argc){
                 printf("Scheduling algorithm number not provided\n");
                 return -1;
@@ -59,7 +60,7 @@ int main(int argc, char *argv[])
                 scheduling_alg = atoi(argv[i+1]);
                 shceduling_alg_index = i+1;
             }
-        }else if(strcmp(argv[i], "-q")){
+        }else if(strcmp(argv[i], "-q") == 0){
             if(i+1 == argc){
                 printf("No quantum number provided\n");
                 return -1;
@@ -69,7 +70,7 @@ int main(int argc, char *argv[])
             }
         }
     }
-
+    printf("shceduling_alg_index:%d\nshceduling_alg%d\n",shceduling_alg_index,scheduling_alg);
     if((scheduling_alg != RR && scheduling_alg != MLFQ) && quantum != -1){
         printf("Quantum parameter specified for an algorithm that doesn't need it\n");
         return -1;
@@ -83,13 +84,16 @@ int main(int argc, char *argv[])
     //TODO: implement the scheduler.
     scheduler_log_f_ptr = fopen("scheduler.log", "w");
     fprintf(scheduler_log_f_ptr, "#At time x process y state arr w total z remain y wait k\n");
-
+    printf("Ana hena dakhel el scheduler");
+    //printf("%d\n",scheduling_alg);
     switch(scheduling_alg){
         case RR:
             break;
         case SJF:
+            SJFSchedule(&Readylist);
             break;
         case HPF:
+            HPFSchedule(&Readylist);
             break;
         case MLFQ:
             MLFQSchedule(&mlfq_ready_list);
@@ -98,13 +102,233 @@ int main(int argc, char *argv[])
             break;
     }
 
-    avg_waiting_time = total_waiting_time / num_of_processes;
-    avg_weighted_turnaround_time = total_weighted_turnaround_time / num_of_processes;
-    cpu_utilization = (idle_cycles / (end_time - start_time + 1)) * 100;
+    avg_waiting_time = (double)total_waiting_time / (double)num_of_processes;
+    avg_weighted_turnaround_time = (double)total_weighted_turnaround_time / (double)num_of_processes;
+    cpu_utilization = (1 - (idle_cycles / (double)(end_time - start_time + 1))) * 100;
 
     //TODO: upon termination release the clock resources.
 
     destroyClk(true);
+}
+void SJFAddToReadyList(struct PriorityQueue* queue, struct PCB proc)
+{
+     pid_t pid;
+    char remaining_time_str[5];
+    pid = fork();
+    proc.real_pid = pid;
+    if(pid == -1){
+        printf("Scheduler : failed to add process %d to the ready queue.\n", proc.pid);
+    }else if(pid == 0){
+        convertIntToStr(proc.remaining_time, 5, remaining_time_str);
+        char* const process_args[] = {(char* const)"./process.o", (char* const)remaining_time_str, NULL};
+        execv("process.o", process_args);
+        
+    }
+    else{
+        num_of_processes++;
+        push(queue, proc, 'r');
+        printf("ana 5lst push l ID: %d\n ",proc.pid);
+    }
+}
+void SJFSchedule(struct PriorityQueue* queue)
+{
+    //printf("Ana hena dakhalat el scheduler");
+    initPriorityQueue(&Readylist);
+    RunningProcess.remaining_time=-2;
+    RunningProcess.pid=-2;
+    int receivingFlag=0;
+    struct msgbuf received_msg;
+    int recv_val = -1;
+    int turnaround_time;
+    double weighted_turnaround_time;
+    int waiting_time;
+    start_time = getClk();
+    //printf("SJF sched started");
+    while (1) {
+
+    // Wait for the next clock tick
+    while (curr_time == getClk());
+    curr_time = getClk();
+
+    // Handle the running process
+    if (RunningProcess.remaining_time >= 0) {
+        printf("Running proc ID: %d\n Running proc Remaining time: %d\n", RunningProcess.pid, RunningProcess.remaining_time);
+        if (RunningProcess.remaining_time == 0) {
+            RunningProcess.state = FINISHED;
+            turnaround_time = curr_time - RunningProcess.arrival_time;
+            if (RunningProcess.running_time != 0) {
+                weighted_turnaround_time = (float)turnaround_time / RunningProcess.running_time;
+            } else {
+                weighted_turnaround_time = 0;
+            }
+            waiting_time = turnaround_time - RunningProcess.running_time;
+            total_waiting_time += waiting_time;
+            total_weighted_turnaround_time += weighted_turnaround_time;
+            schedulerLog(scheduler_log_f_ptr, curr_time, &(RunningProcess), turnaround_time, weighted_turnaround_time);
+
+            // Pop the next process from the ready list
+            RunningProcess = pop(&Readylist);
+        } else {
+            // Decrement remaining time and resume the process
+            RunningProcess.remaining_time--;
+            kill(RunningProcess.real_pid, SIGUSR1);
+            RunningProcess.state = RESUMED;
+            schedulerLog(scheduler_log_f_ptr, curr_time, &(RunningProcess), 0, 0);
+        }
+    } else if (!isEmpty(&Readylist)) {
+        // Pick the next process if ready list is not empty
+        RunningProcess = pop(&Readylist);
+    }
+    else{
+        idle_cycles++;
+    }
+
+    // Reset recv_val and handle incoming messages
+    recv_val = -1;
+    while (recv_val == -1 && curr_time == getClk()) {
+        recv_val = msgrcv(mqid, &received_msg, sizeof(struct PCB), 0, IPC_NOWAIT);
+        if (received_msg.mtype==2)
+        {
+            receivingFlag=1;
+        }
+        
+    }
+    if (receivingFlag==1)
+    {
+        printf("1\n");
+    }
+    
+    if (recv_val != -1 || receivingFlag==1) {
+        if (received_msg.mtype == 1) {
+            printf("Received message PID: %d\n", received_msg.proc.pid);
+            SJFAddToReadyList(&Readylist, received_msg.proc);
+        } else if (receivingFlag==1 && isEmpty(&Readylist)&& RunningProcess.remaining_time <= 0) {
+            // Exit only if there are no remaining processes
+            if (!isEmpty(&Readylist) || RunningProcess.remaining_time > 0) {
+                continue; // Do not exit if there are still processes
+            }
+            printf("Exiting scheduler...\n");
+            break;
+        }
+    }
+}
+end_time=curr_time;
+received_msg.mtype=9;
+msgsnd(mqid, &received_msg, sizeof(struct PCB), !IPC_NOWAIT);
+}
+void HPFAddToReadyList(struct PriorityQueue* queue, struct PCB proc)
+{
+     pid_t pid;
+    char remaining_time_str[5];
+    pid = fork();
+    proc.real_pid = pid;
+    if(pid == -1){
+        printf("Scheduler : failed to add process %d to the ready queue.\n", proc.pid);
+    }else if(pid == 0){
+        convertIntToStr(proc.remaining_time, 5, remaining_time_str);
+        char* const process_args[] = {(char* const)"./process.o", (char* const)remaining_time_str, NULL};
+        execv("process.o", process_args);
+        
+    }
+    else{
+        num_of_processes++;
+        push(queue, proc, 'p');
+    }
+}
+void HPFSchedule(struct PriorityQueue* queue)
+{
+    //printf("Ana hena dakhalat el scheduler");
+    initPriorityQueue(&Readylist);
+    RunningProcess.remaining_time=-2;
+    RunningProcess.pid=-2;
+    int receivingFlag=0;
+    struct msgbuf received_msg;
+    int recv_val = -1;
+    int turnaround_time;
+    double weighted_turnaround_time;
+    int waiting_time;
+    start_time = getClk();
+    //printf("SJF sched started");
+    while (1) {
+
+    // Wait for the next clock tick
+    while (curr_time == getClk());
+    curr_time = getClk();
+
+    // Handle the running process
+    if (RunningProcess.remaining_time >= 0) {
+        printf("Running proc ID: %d\n Running proc Remaining time: %d\n", RunningProcess.pid, RunningProcess.remaining_time);
+        if (RunningProcess.remaining_time == 0) {
+            RunningProcess.state = FINISHED;
+            turnaround_time = curr_time - RunningProcess.arrival_time;
+            if (RunningProcess.running_time != 0) {
+                weighted_turnaround_time = (float)turnaround_time / RunningProcess.running_time;
+            } else {
+                weighted_turnaround_time = 0;
+            }
+            waiting_time = turnaround_time - RunningProcess.running_time;
+            total_waiting_time += waiting_time;
+            total_weighted_turnaround_time += weighted_turnaround_time;
+            schedulerLog(scheduler_log_f_ptr, curr_time, &(RunningProcess), turnaround_time, weighted_turnaround_time);
+
+            // Pop the next process from the ready list
+            RunningProcess = pop(&Readylist);
+        } else {
+            // Decrement remaining time and resume the process
+            if(!isEmpty(&Readylist))
+            {
+                if(Readylist.head->proc.priority < RunningProcess.priority)
+                {
+                    printf("Ay haga msh hatefer2");
+                    push(&Readylist,RunningProcess,'p');
+                    RunningProcess = pop(&Readylist);
+                }
+            }
+            RunningProcess.remaining_time--;
+            kill(RunningProcess.real_pid, SIGUSR1);
+            RunningProcess.state = RESUMED;
+            schedulerLog(scheduler_log_f_ptr, curr_time, &(RunningProcess), 0, 0);
+        }
+    } else if (!isEmpty(&Readylist)) {
+        // Pick the next process if ready list is not empty
+        RunningProcess = pop(&Readylist);
+    }
+    else{
+        idle_cycles++;
+    }
+
+    // Reset recv_val and handle incoming messages
+    recv_val = -1;
+    while (recv_val == -1 && curr_time == getClk()) {
+        recv_val = msgrcv(mqid, &received_msg, sizeof(struct PCB), 0, IPC_NOWAIT);
+        if (received_msg.mtype==2)
+        {
+            receivingFlag=1;
+        }
+        
+    }
+    if (receivingFlag==1)
+    {
+        printf("1\n");
+    }
+    
+    if (recv_val != -1 || receivingFlag==1) {
+        if (received_msg.mtype == 1) {
+            printf("Received message PID: %d\n", received_msg.proc.pid);
+            SJFAddToReadyList(&Readylist, received_msg.proc);
+        } else if (receivingFlag==1 && isEmpty(&Readylist)&& RunningProcess.remaining_time <= 0) {
+            // Exit only if there are no remaining processes
+            if (!isEmpty(&Readylist) || RunningProcess.remaining_time > 0) {
+                continue; // Do not exit if there are still processes
+            }
+            printf("Exiting scheduler...\n");
+            break;
+        }
+    }
+}
+end_time=curr_time;
+received_msg.mtype=9;
+msgsnd(mqid, &received_msg, sizeof(struct PCB), !IPC_NOWAIT);
 }
 
 void initializeMLFQ(struct MLFQ* multilevel_queue){
@@ -281,6 +505,8 @@ void MLFQSchedule(struct MLFQ* multilevel_queue){
             idle_cycles++;
         }
     }
-
-    end_time = curr_time;
+ received_msg.mtype=9;
+msgsnd(mqid, &received_msg, sizeof(struct PCB), !IPC_NOWAIT);
+end_time = curr_time;
+    
 }

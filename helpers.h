@@ -2,6 +2,7 @@
 #define HELPERS_H_
 
 #include <stdlib.h>
+#include"data_structures.h"
 #include "headers.h"
 
 int convertIntToStr(int i, int str_len, char* str){
