@@ -27,6 +27,7 @@ typedef short bool;
 
 typedef  enum {STARTING=1, RESUMED, STOPPED, FINISHED } PROC_STAT;
 
+
 struct PCB{
     int pid;
     int arrival_time;
@@ -35,6 +36,8 @@ struct PCB{
     int priority;
     int waiting_time;
     int last_time_running;
+    int real_pid;
+    int TA;
     PROC_STAT state;
 };
 
@@ -82,9 +85,12 @@ void initClk()
 
 void destroyClk(bool terminateAll)
 {
+   
     shmdt(shmaddr);
     if (terminateAll)
     {
+        int mqid = msgget(MSG_Q_KEY, 0644);
+        msgctl(mqid, IPC_RMID, NULL);
         killpg(getpgrp(), SIGINT);
     }
 }

@@ -13,7 +13,6 @@ int main(int agrc, char *argv[])
     remainingtime = atoi(argv[1]);
 
     initClk();
-
     while (remainingtime > 0)
     {
         // stay here and only respond for signals
